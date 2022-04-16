@@ -30,6 +30,28 @@ func newServer(ip string, port string) *Server {
 	return server
 }
 
+func (this *Server) BroadCast(user *User, message string) {
+	//进行广播的function
+	sendMsg := "[" + user.Addr + "]" + user.Name + ":" + message
+
+	this.Message <- sendMsg //发送到Server的channel中去
+
+}
+
+//无限监听channel的function， 一旦有了消息就需要传递给用户的channel
+func (this *Server) ListenChannel() {
+	for {
+		//遍历map， 将所得到的string写到用户对应的channel中去
+
+		msg := <-this.Message
+		this.mapLock.Lock()
+		for _, clientC := range this.Onlinemap {
+			clientC.C <- msg
+		}
+		this.mapLock.Unlock()
+	}
+}
+
 func (this *Server) Handler(conn net.Conn) {
 	//处理接收连接的函数，用户上线成功
 
@@ -42,7 +64,12 @@ func (this *Server) Handler(conn net.Conn) {
 
 	this.mapLock.Unlock()
 
-	fmt.Println("连接成功！")
+	//进行广播
+	this.BroadCast(user, "已上线")
+
+	select {} //进行阻塞？？？？
+
+	//fmt.Println("连接成功！")
 }
 
 //成员函数， Start Server
@@ -56,6 +83,8 @@ func (this *Server) Start() {
 		return
 	}
 	defer listener.Close() //结束的时候自动进行Close
+
+	go this.ListenChannel() //监听Server的channel是否是有数据的
 
 	for {
 		//无限循环去accept 新的连接
