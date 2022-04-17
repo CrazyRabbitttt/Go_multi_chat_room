@@ -79,6 +79,27 @@ func (this *Client) DoMessage(message string) {
 		}
 
 		this.server.mapLock.Unlock()
+	} else if len(message) > 7 && message[:7] == "rename|" {
+		//消息格式：rename|张三
+
+		newName := message[7:] //获取到新起的名字
+
+		//judge if the new_name is there
+		_, ok := this.server.OnlineMap[newName]
+		if ok {
+			this.sendMsg("当前用户名已经被使用了！")
+		} else {
+			this.server.mapLock.Lock()
+			//将映射当前对象的Name的字段首先删除，再添加
+			delete(this.server.OnlineMap, this.Name)
+			this.server.OnlineMap[newName] = this
+			this.server.mapLock.Unlock()
+
+			this.Name = newName
+			this.sendMsg("您已经成功更新用户名：" + newName + "\n")
+
+		}
+
 	} else {
 		this.server.BroadCast(this, message)
 	}
