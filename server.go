@@ -8,75 +8,71 @@ import (
 )
 
 type Server struct {
-	Ip   string
-	Port string
+	IP        string
+	Port      string
+	OnlineMap map[string]*Client
+	mapLock   sync.RWMutex
 
-	Onlinemap map[string]*User //每一个string 对应与一个User的对象
-
-	mapLock sync.RWMutex
-
-	Message chan string //用于消息广播的channel
+	Message chan string //用于向Client的channel进行转发数据的channel
 }
 
-//function : make a object of server
 func newServer(ip string, port string) *Server {
-	//能够创建一个Server的对象
+
 	server := &Server{
-		Ip:        ip,
+		IP:        ip,
 		Port:      port,
-		Onlinemap: make(map[string]*User),
+		OnlineMap: make(map[string]*Client),
 		Message:   make(chan string),
 	}
 
 	return server
 }
 
-func (this *Server) BroadCast(user *User, message string) {
-	//进行广播的function
-	sendMsg := "[" + user.Addr + "]" + user.Name + ":" + message
+//哪一个客户， 需要广播的消息是啥
+func (this *Server) BroadCast(client *Client, message string) {
+	sendMessage := "[" + client.Addr + "]" + client.Name + ":" + message
 
-	this.Message <- sendMsg //发送到Server的channel中去
+	this.Message <- sendMessage //将用户对应的消息传送到Server's channel中
 
 }
 
-//无限监听channel的function， 一旦有了消息就需要传递给用户的channel
 func (this *Server) ListenChannel() {
 	for {
-		//遍历map， 将所得到的string写到用户对应的channel中去
+		//遍历map,将所得到的string写到对应的client的channel中
 
 		msg := <-this.Message
+
 		this.mapLock.Lock()
-		for _, clientC := range this.Onlinemap {
+
+		for _, clientC := range this.OnlineMap {
 			clientC.C <- msg
 		}
+
 		this.mapLock.Unlock()
+
 	}
 }
 
+//Server 的Handler成员函数
 func (this *Server) Handler(conn net.Conn) {
-	//处理接收连接的函数，用户上线成功
+	fmt.Println("Succefully calling handler function")
+	//用户上线成功，需要将用户放到Online Map中去
+	user := newClient(conn, this) //将当前的Server进行同client的关联
 
-	user := newUser(conn)
+	user.Online()
 
-	//将用户加入到map表中
-	this.mapLock.Lock()
-
-	this.Onlinemap[user.Name] = user
-
-	this.mapLock.Unlock()
-
-	//进行广播
-	this.BroadCast(user, "已上线")
-
-	//需要进行下线消息的通知
+	//进行广播的function
 
 	go func() {
+		//goroutine 去无限的接收用户传递来的消息，并且进行广播
+
 		buf := make([]byte, 4096)
 
 		for {
-			cnt, err := conn.Read(buf) //读到buf中去
-			if cnt == 0 {
-				this.BroadCast(user, "下线")
+			cnt, err := conn.Read(buf) //read from connection
+
+			if cnt == 0 { //如果接受的是空的， 那么就代表是下线了
+				user.Offline()
 				return
 			}
 
@@ -85,45 +81,40 @@ func (this *Server) Handler(conn net.Conn) {
 				return
 			}
 
-			msg := string(buf[:cnt-1]) // 提取数据
+			msg := string(buf[:cnt-1]) //从流中提取出数据
 
-			this.BroadCast(user, msg)
-
+			//用户针对与msg进行消息的处理
+			user.DoMessage(user, msg)
 		}
 
 	}()
 
-	select {} //进行阻塞？？？？
+	select {}
 
-	//fmt.Println("连接成功！")
 }
 
-//成员函数， Start Server
 func (this *Server) Start() {
-	fmt.Println("calling start function")
 
-	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%s", this.Ip, this.Port))
+	fmt.Println("Calling start function")
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%s", this.IP, this.Port))
 
 	if err != nil {
-		fmt.Println("ner error: ", err)
+		fmt.Println("Start error: ", err)
 		return
 	}
-	defer listener.Close() //结束的时候自动进行Close
+
+	defer listener.Close() //最后退出的时候进行listener 的退出
 
 	go this.ListenChannel() //监听Server的channel是否是有数据的
 
 	for {
-		//无限循环去accept 新的连接
-
 		conn, err := listener.Accept()
 
 		if err != nil {
-			fmt.Println("accept err: ", err)
+			fmt.Println("Accept error :", err)
 			return
 		}
-
 		go this.Handler(conn)
-
 	}
 
 }

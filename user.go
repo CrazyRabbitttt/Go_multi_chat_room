@@ -2,34 +2,65 @@ package main
 
 import "net"
 
-type User struct {
-	Name string
-	Addr string
-	C    chan string
-	conn net.Conn //进行客户端通信的conn
+type Client struct {
+	Addr   string
+	Name   string
+	C      chan string //用于进行通信的channel
+	conn   net.Conn
+	server *Server //当前Client属于哪一个Server
 }
 
-//创建一个User的function
-func newUser(conn net.Conn) *User {
+//通过一个conn进行Client端的创建
+func newClient(conn net.Conn, server *Server) *Client { //创建一个Client对象
 
-	userAddr := conn.RemoteAddr().String()
-	user := &User{
-		Name: userAddr,
-		Addr: userAddr,
-		C:    make(chan string), //创建string类型的chann
-		conn: conn,
+	useradd := conn.RemoteAddr().String()
+
+	client := &Client{
+		Addr:   useradd,
+		Name:   useradd,
+		C:      make(chan string),
+		conn:   conn,
+		server: server,
 	}
 
-	//启动监听当前的user channel消息的 goroutine
-	go user.ListenMessage()
-	return user
+	//监听当前的client channel 的消息的goroutne
+
+	go client.ListenMessage()
+
+	return client
 }
 
-//监听当前的chann，一旦有消息需要发送给客户端
+//clinet就需要无限的进行监听自己的channel， 如果有消息的话就读取出来
 
-func (this *User) ListenMessage() {
+func (this *Client) ListenMessage() {
 	for {
 		message := <-this.C
-		this.conn.Write([]byte(message + "\n")) //将message 发送回去给到客户端
+		this.conn.Write([]byte(message + "\n")) //能够写到客户端的标准输入中去
 	}
+}
+
+func (this *Client) Online() {
+	this.server.mapLock.Lock()
+
+	this.server.OnlineMap[this.Name] = this
+
+	this.server.mapLock.Unlock()
+
+	this.server.BroadCast(this, "已上线")
+
+}
+
+func (this *Client) Offline() {
+	this.server.mapLock.Lock()
+
+	delete(this.server.OnlineMap, this.Name) //将当前Client的Name进行删除
+
+	this.server.BroadCast(this, "已下线")
+
+	this.server.mapLock.Unlock()
+}
+
+//哪一个用户发的什么消息
+func (this *Client) DoMessage(client *Client, message string) {
+	this.server.BroadCast(this, message)
 }
