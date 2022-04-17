@@ -84,7 +84,7 @@ func (this *Server) Handler(conn net.Conn) {
 			msg := string(buf[:cnt-1]) //从流中提取出数据
 
 			//用户针对与msg进行消息的处理
-			user.DoMessage(user, msg)
+			user.DoMessage(msg)
 		}
 
 	}()
