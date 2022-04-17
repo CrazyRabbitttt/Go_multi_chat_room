@@ -1,6 +1,8 @@
 package main
 
-import "net"
+import (
+	"net"
+)
 
 type Client struct {
 	Addr   string
@@ -60,7 +62,25 @@ func (this *Client) Offline() {
 	this.server.mapLock.Unlock()
 }
 
+//发送个特定的Client， 谁查的就传送给谁
+func (this *Client) sendMsg(msg string) {
+	this.conn.Write([]byte(msg))
+}
+
 //哪一个用户发的什么消息
-func (this *Client) DoMessage(client *Client, message string) {
-	this.server.BroadCast(this, message)
+func (this *Client) DoMessage(message string) {
+
+	if message == "who" { //如果发送的是"who", 就是查询所有在线的Client
+		this.server.mapLock.Lock()
+
+		for _, user := range this.server.OnlineMap {
+			onlineMsg := "[" + user.Addr + "]" + user.Name + ":在线。。。。。\n"
+			this.sendMsg(onlineMsg)
+		}
+
+		this.server.mapLock.Unlock()
+	} else {
+		this.server.BroadCast(this, message)
+	}
+
 }
