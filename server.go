@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 )
 
 type Server struct {
@@ -63,6 +64,8 @@ func (this *Server) Handler(conn net.Conn) {
 
 	//进行广播的function
 
+	islive := make(chan bool)
+
 	go func() {
 		//goroutine 去无限的接收用户传递来的消息，并且进行广播
 
@@ -85,11 +88,30 @@ func (this *Server) Handler(conn net.Conn) {
 
 			//用户针对与msg进行消息的处理
 			user.DoMessage(msg)
+
+			//如果做了任何的操作，那么就是活跃的
+			islive <- true
 		}
 
 	}()
 
-	select {}
+	//当前handler进行阻塞
+	for {
+		select {
+		case <-islive:
+			//如果执行了这一步也就是用户是活跃的就跳过了这个select
+			//充值定时器
+		case <-time.After(time.Second * 10):
+
+			user.sendMsg("由于您处于不活跃状态，您已被踢出房间")
+			//已经超时了，将当前的User的channel强行关闭
+			close(user.C)
+			//关闭conn套接字的连接
+			conn.Close()
+			//return function
+			return
+		}
+	}
 
 }
 
