@@ -101,7 +101,7 @@ func (this *Server) Handler(conn net.Conn) {
 		case <-islive:
 			//如果执行了这一步也就是用户是活跃的就跳过了这个select
 			//充值定时器
-		case <-time.After(time.Second * 10):
+		case <-time.After(time.Second * 100):
 
 			user.sendMsg("由于您处于不活跃状态，您已被踢出房间")
 			//已经超时了，将当前的User的channel强行关闭

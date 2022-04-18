@@ -2,6 +2,7 @@ package main
 
 import (
 	"net"
+	"strings"
 )
 
 type Client struct {
@@ -98,6 +99,30 @@ func (this *Client) DoMessage(message string) {
 			this.Name = newName
 			this.sendMsg("您已经成功更新用户名：" + newName + "\n")
 
+		}
+
+	} else if len(message) > 4 && message[:3] == "to|" {
+		//消息格式："to|name|消息内容"
+		remoteName := strings.Split(message, "|")[1]
+
+		if remoteName == "" {
+			this.sendMsg("usage: to|Name|message" + "\n")
+		}
+		//需要根据用户名找到对应的User对象
+		remoteUser, ok := this.server.OnlineMap[remoteName]
+
+		//用户名不存在的问题
+		if !ok {
+			this.sendMsg("改用户名不存在" + "\n")
+			return
+		}
+		//发送的消息为空的问题
+		sendMessage := strings.Split(message, "|")[2]
+
+		if sendMessage == "" {
+			this.sendMsg("发送消息为空。。。请重新发送" + "\n")
+		} else {
+			remoteUser.sendMsg(this.Name + "对您悄悄说：" + sendMessage + "\n")
 		}
 
 	} else {
